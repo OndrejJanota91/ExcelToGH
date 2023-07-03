@@ -17,6 +17,7 @@ namespace ExcelToGH
         bool DeletedOutputs = false;
         bool SetResult = true;
         string WarningMessage = "";
+        bool Wires = true;
         Dictionary<string, List<string>> Result = default;
         public ExcelToGHComponent()
           : base("ExcelToGH", "ExcelToGH",
@@ -24,7 +25,6 @@ namespace ExcelToGH
             "ExcelToGH", "ExcelToGH")
         {
         }
-
         public override void AppendAdditionalMenuItems(ToolStripDropDown menu)
         {
             base.AppendAdditionalMenuItems(menu);
@@ -34,6 +34,8 @@ namespace ExcelToGH
             ProgramToggle2.ToolTipText = "Read by columns";
             var ProgramToggle3 = Menu_AppendItem(menu, "Read by rows", Menu_Clicked, true, this.Rows);
             ProgramToggle3.ToolTipText = "Read by rows";
+            var ProgramToggle4 = Menu_AppendItem(menu, "Create wires", Wire, true, this.Wires);
+            ProgramToggle4.ToolTipText ="Automatically create output wires";
         }
         protected void UpdateOutput()
         {
@@ -43,7 +45,7 @@ namespace ExcelToGH
                         if (!this.Rows)
                         {
                             Param_GenericObject param = new Param_GenericObject();
-                            param.Name = Params.Input[1].VolatileData.get_Branch(0)[i].ToString();
+                            param.Name = Params.Input[2].VolatileData.get_Branch(0)[i].ToString();
                             param.NickName = param.Name;
                             param.Description = "Excel column";
                             param.Optional = true;
@@ -53,7 +55,7 @@ namespace ExcelToGH
                         else if (this.Rows)
                         {
                             Param_GenericObject param = new Param_GenericObject();
-                            param.Name = Params.Input[1].VolatileData.get_Branch(0)[i].ToString();
+                            param.Name = Params.Input[2].VolatileData.get_Branch(0)[i].ToString();
                             param.NickName = param.Name;
                             param.Description = "Excel row";
                             param.Optional = true;
@@ -64,7 +66,6 @@ namespace ExcelToGH
             this.FromOutputUpdate = true;
             ExpireSolution(true);
         }
-
         protected void RemoveParametersCallback(GH_Document document)
         {
             this.WarningMessage = "";
@@ -120,6 +121,10 @@ namespace ExcelToGH
             this.SetResult = true;
             ExpireSolution(true);
         }
+        protected void Wire(object sender, EventArgs e)
+        {
+            this.Wires = !this.Wires;
+        }
         protected void Menu_Clicked(object sender, EventArgs e)
         {
             ToolStripMenuItem senderObj = (sender as ToolStripMenuItem);
@@ -137,6 +142,7 @@ namespace ExcelToGH
         protected override void RegisterInputParams(GH_Component.GH_InputParamManager pManager)
         {
             pManager.AddTextParameter("Path to excel", "Path", "Path to .xslx file", GH_ParamAccess.item);
+            pManager.AddTextParameter("sheet name", "Sheet name", "Name of sheet in excel", GH_ParamAccess.item);
             pManager.AddTextParameter("Column/Row names which are read", "Column/Row names", "Column/Row names which are read from excel file", GH_ParamAccess.list);
         }
         protected override void RegisterOutputParams(GH_Component.GH_OutputParamManager pManager)
@@ -157,18 +163,22 @@ namespace ExcelToGH
             {
                 string ExcelPath = default;
                 List<string> ColumnsNumbers = new List<string>();
+                string SheetName = "";
+
                 if (!DA.GetData(0, ref ExcelPath)) return;
-                if (!DA.GetDataList(1, ColumnsNumbers)) return;
+                if (!DA.GetData(1, ref SheetName)) return;
+                if (!DA.GetDataList(2, ColumnsNumbers)) return;
+
                 Message = "Reading excel file.";
                 Instances.RedrawCanvas();
                 this.Result = new Dictionary<string, List<string>>();
                 if (!Rows)
                 {
-                    Result = ReadXLSColumn(ExcelPath, ColumnsNumbers);
+                    Result = ReadXLSColumn(ExcelPath, SheetName, ColumnsNumbers);
                 }
                 else
                 {
-                    Result = ReadXLSRows(ExcelPath, ColumnsNumbers);
+                    Result = ReadXLSRows(ExcelPath, SheetName, ColumnsNumbers);
                 }
                 UpdateOutput();
                 this.SetResult = false;
@@ -194,8 +204,12 @@ namespace ExcelToGH
                     this.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, this.WarningMessage);
                 }
                 Instances.RedrawCanvas();
-                GH_Document thisDocument = this.OnPingDocument();
-                thisDocument.ScheduleSolution(5, UpdateWiresCallBack);
+                if (Wires)
+                {
+                    GH_Document thisDocument = this.OnPingDocument();
+                    thisDocument.ScheduleSolution(5, UpdateWiresCallBack);
+                }
+
             }
             else
             {
@@ -203,7 +217,7 @@ namespace ExcelToGH
                 ExpireSolution(true);
             }
         }
-        private Dictionary<string, List<string>> ReadXLSRows(string Path, List<string> RNames)
+        private Dictionary<string, List<string>> ReadXLSRows(string Path, string SheetName, List<string> RNames)
         {
 
             Dictionary<string, int> RowNames = new Dictionary<string, int>();
@@ -211,67 +225,86 @@ namespace ExcelToGH
 
             Excel.Application xlApp;
             Excel.Workbook xlWorkBook;
-            Excel.Worksheet xlWorkSheet;
+            Excel.Worksheet xlWorkSheet = default;
 
             xlApp = new Excel.Application();
             xlWorkBook = xlApp.Workbooks.Open(Path, 0, true, 5, "", "", true, Excel.XlPlatform.xlWindows, "\t", false, false, 0, true, 1, 0);
-            xlWorkSheet = (Excel.Worksheet)xlWorkBook.Worksheets.get_Item(1);
-            Excel.Range xlRange = xlWorkSheet.UsedRange;
-            xlRange.ClearFormats();
-            var row = 1;
-            while (row <= xlRange.Rows.Count)
-            {
-                if ((xlRange[row, 1] as Excel.Range).Value2 != null)
-                {
-                    if (!RowNames.ContainsKey((xlRange[row, 1] as Excel.Range).Value2.ToString()))
-                    {
-                        RowNames.Add((xlRange[row, 1] as Excel.Range).Value2.ToString(), row);
-                    }
-                    else
-                    {
-                        this.WarningMessage = "Rows in column A contains duplicate names";
-                        return new Dictionary<string, List<string>> ();
-                    }
 
+
+            foreach (Excel.Worksheet xlSheet in xlWorkBook.Worksheets)
+            {
+                if (xlSheet.Name == SheetName)
+                {
+                    xlWorkSheet = xlSheet;
+                    break;
                 }
-                row++;
-            }
 
-            foreach (string Name in RNames)
+            }
+            if (xlWorkSheet != default)
             {
-                var column = 2;
-                if (RowNames.ContainsKey(Name))
+                Excel.Range xlRange = xlWorkSheet.UsedRange;
+                xlRange.ClearFormats();
+                var row = 1;
+                while (row <= xlRange.Rows.Count)
                 {
-                    List<string> Values = new List<string>();
-                    while (column <= (xlRange.Rows[RowNames[Name], Type.Missing] as Excel.Range).Columns.Count)
+                    if ((xlRange[row, 1] as Excel.Range).Value2 != null)
                     {
-                        if ((xlWorkSheet.Cells[RowNames[Name], column] as Excel.Range).Value2 != null)
+                        if (!RowNames.ContainsKey((xlRange[row, 1] as Excel.Range).Value2.ToString()))
                         {
-                            Values.Add((xlWorkSheet.Cells[RowNames[Name],column] as Excel.Range).Value2.ToString());
-                            column++;
+                            RowNames.Add((xlRange[row, 1] as Excel.Range).Value2.ToString(), row);
                         }
                         else
                         {
-                            break;
+                            this.WarningMessage = "Rows in column A contains duplicate name.";
+                            return new Dictionary<string, List<string>>();
                         }
 
-
                     }
-                    Result.Add(Name, Values);
+                    row++;
                 }
-                else
-                {
-                    Result.Add(Name, new List<string>());
-                }
-            }
 
-            xlApp.DisplayAlerts = false;
-            xlWorkBook.Save();
-            xlWorkBook.Close();
-            xlApp.Quit();
-            return Result;
+                foreach (string Name in RNames)
+                {
+                    var column = 2;
+                    if (RowNames.ContainsKey(Name))
+                    {
+                        List<string> Values = new List<string>();
+                        while (column <= (xlRange.Rows[RowNames[Name], Type.Missing] as Excel.Range).Columns.Count)
+                        {
+                            if ((xlWorkSheet.Cells[RowNames[Name], column] as Excel.Range).Value2 != null)
+                            {
+                                Values.Add((xlWorkSheet.Cells[RowNames[Name], column] as Excel.Range).Value2.ToString());
+                                column++;
+                            }
+                            else
+                            {
+                                break;
+                            }
+
+
+                        }
+                        Result.Add(Name, Values);
+                    }
+                    else
+                    {
+                        Result.Add(Name, new List<string>());
+                    }
+                }
+
+                xlApp.DisplayAlerts = false;
+                xlWorkBook.Save();
+                xlWorkBook.Close();
+                xlApp.Quit();
+                return Result;
+            }
+            else
+            {                  
+                this.WarningMessage = "Sheet name was not found in excel file.";
+                return new Dictionary<string, List<string>>();
+            }
+           
         }
-        private Dictionary<string, List<string>> ReadXLSColumn(string Path, List<string> CNames)
+        private Dictionary<string, List<string>> ReadXLSColumn(string Path, string SheetName, List<string> CNames)
         {
 
             Dictionary<string, int> ColumnNames = new Dictionary<string, int>();
@@ -279,66 +312,83 @@ namespace ExcelToGH
 
             Excel.Application xlApp;
             Excel.Workbook xlWorkBook;
-            Excel.Worksheet xlWorkSheet;
+            Excel.Worksheet xlWorkSheet = default;
 
             xlApp = new Excel.Application();
             xlWorkBook = xlApp.Workbooks.Open(Path, 0, true, 5, "", "", true, Excel.XlPlatform.xlWindows, "\t", false, false, 0, true, 1, 0);
-            xlWorkSheet = (Excel.Worksheet)xlWorkBook.Worksheets.get_Item(1);
-            Excel.Range xlRange = xlWorkSheet.UsedRange;
-            xlRange.ClearFormats();
-            var column = 1;
-            while (column <= xlRange.Columns.Count)
+            
+            foreach (Excel.Worksheet xlSheet in xlWorkBook.Worksheets)
             {
-                if ((xlRange[1, column] as Excel.Range).Value2  != null)
+                if (xlSheet.Name == SheetName)
                 {
-                    if (!ColumnNames.ContainsKey((xlRange[1, column] as Excel.Range).Value2.ToString()))
-                    {
-
-                        ColumnNames.Add((xlRange[1, column] as Excel.Range).Value2.ToString(), column);
-                    }
-                    else
-                    {
-                        this.WarningMessage = "Column in row 1 contains duplicate names";
-                        return new Dictionary<string, List<string>>();
-                    }
-
+                    xlWorkSheet = xlSheet;
+                    break;
                 }
-                column++;
-            }
 
-            foreach (string Name in CNames)
+            }
+            if (xlWorkSheet != default)
             {
-                var row = 2;
-                if (ColumnNames.ContainsKey(Name))
+                Excel.Range xlRange = xlWorkSheet.UsedRange;
+                xlRange.ClearFormats();
+                var column = 1;
+                while (column <= xlRange.Columns.Count)
                 {
-                    List<string> Values = new List<string>();
-                    while (row <= (xlRange.Columns[ColumnNames[Name], Type.Missing] as Excel.Range).Rows.Count)
+                    if ((xlRange[1, column] as Excel.Range).Value2 != null)
                     {
-                        if ((xlWorkSheet.Cells[row, ColumnNames[Name]] as Excel.Range).Value2 != null)
+                        if (!ColumnNames.ContainsKey((xlRange[1, column] as Excel.Range).Value2.ToString()))
                         {
-                            Values.Add((xlWorkSheet.Cells[row, ColumnNames[Name]] as Excel.Range).Value2.ToString());
-                            row++;
+
+                            ColumnNames.Add((xlRange[1, column] as Excel.Range).Value2.ToString(), column);
                         }
                         else
                         {
-                            break;
+                            this.WarningMessage = "Column in row 1 contains duplicate names";
+                            return new Dictionary<string, List<string>>();
                         }
 
-
                     }
-                    Result.Add(Name, Values);
+                    column++;
                 }
-                else
-                {
-                    Result.Add(Name, new List<string>());
-                }
-            }
 
-            xlApp.DisplayAlerts = false;
-            xlWorkBook.Save();
-            xlWorkBook.Close();
-            xlApp.Quit();
-            return Result;
+                foreach (string Name in CNames)
+                {
+                    var row = 2;
+                    if (ColumnNames.ContainsKey(Name))
+                    {
+                        List<string> Values = new List<string>();
+                        while (row <= (xlRange.Columns[ColumnNames[Name], Type.Missing] as Excel.Range).Rows.Count)
+                        {
+                            if ((xlWorkSheet.Cells[row, ColumnNames[Name]] as Excel.Range).Value2 != null)
+                            {
+                                Values.Add((xlWorkSheet.Cells[row, ColumnNames[Name]] as Excel.Range).Value2.ToString());
+                                row++;
+                            }
+                            else
+                            {
+                                break;
+                            }
+
+
+                        }
+                        Result.Add(Name, Values);
+                    }
+                    else
+                    {
+                        Result.Add(Name, new List<string>());
+                    }
+                }
+
+                xlApp.DisplayAlerts = false;
+                xlWorkBook.Save();
+                xlWorkBook.Close();
+                xlApp.Quit();
+                return Result;
+            }
+            else
+            {
+                this.WarningMessage = "Sheet name was not found in excel file.";
+                return new Dictionary<string, List<string>>();
+            }
         }
         #region VARIABLE COMPONENT INTERFACE IMPLEMENTATION
         public bool CanInsertParameter(GH_ParameterSide side, int index)
