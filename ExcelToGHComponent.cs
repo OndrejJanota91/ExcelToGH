@@ -418,7 +418,6 @@ namespace ExcelToGH
             }
             catch
             { 
-
                 xlApp.DisplayAlerts = false;
                 xlWorkBook.Close();
                 xlApp.Quit();
