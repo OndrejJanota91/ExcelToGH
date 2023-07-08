@@ -39,7 +39,7 @@
   </PropertyGroup>
   
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <OutputPath>C:\Users\A408201\AppData\Roaming\Grasshopper\Libraries\</OutputPath>
+    <OutputPath>C:\Users\A408201\Desktop\GH\</OutputPath>
   </PropertyGroup>
 
 </Project>
