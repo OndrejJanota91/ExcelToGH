@@ -35,34 +35,27 @@ namespace ExcelToGH
             var ProgramToggle3 = Menu_AppendItem(menu, "Read by rows", Menu_Clicked, true, this.Rows);
             ProgramToggle3.ToolTipText = "Read by rows";
             var ProgramToggle4 = Menu_AppendItem(menu, "Create wires", Wire, true, this.Wires);
-            ProgramToggle4.ToolTipText ="Automatically create output wires";
+            ProgramToggle4.ToolTipText = "Automatically create output wires";
         }
         protected void UpdateOutput()
         {
-                for (int i = 0; i < Result.Count; i++)
-                {
-                    string name = Result.ElementAt(i).Key;
-                        if (!this.Rows)
-                        {
-                            Param_GenericObject param = new Param_GenericObject();
-                            param.Name = Params.Input[2].VolatileData.get_Branch(0)[i].ToString();
-                            param.NickName = param.Name;
-                            param.Description = "Excel column";
-                            param.Optional = true;
-                            param.Access = GH_ParamAccess.list;
-                            Params.RegisterOutputParam(param);
-                        }
-                        else if (this.Rows)
-                        {
-                            Param_GenericObject param = new Param_GenericObject();
-                            param.Name = Params.Input[2].VolatileData.get_Branch(0)[i].ToString();
-                            param.NickName = param.Name;
-                            param.Description = "Excel row";
-                            param.Optional = true;
-                            param.Access = GH_ParamAccess.list;
-                            Params.RegisterOutputParam(param);
-                        }                
-                }
+            for (int i = 0; i < Result.Count; i++)
+            {
+                string name = Result.ElementAt(i).Key;
+
+                Param_GenericObject param = new Param_GenericObject();
+                param.Name = Params.Input[2].VolatileData.get_Branch(0)[i].ToString();
+                param.NickName = param.Name;
+                param.Optional = true;
+                param.Access = GH_ParamAccess.list;
+                
+                if (this.Rows)
+                    param.Description = "Excel row";
+                else
+                    param.Description = "Excel column";
+
+                Params.RegisterOutputParam(param);
+            }
             this.FromOutputUpdate = true;
             ExpireSolution(true);
         }
@@ -91,10 +84,10 @@ namespace ExcelToGH
                     {
                         if (this.Result.ContainsKey(param.NickName))
                         {
-                            param.AddSource( this.Params.Output.Find(x => x.Name == param.NickName));
+                            param.AddSource(this.Params.Output.Find(x => x.Name == param.NickName));
                         }
                     }
-                } 
+                }
                 else if (docObject as IGH_Param != null)
                 {
                     IGH_Param param = docObject as IGH_Param;
@@ -222,7 +215,7 @@ namespace ExcelToGH
             Excel.Application xlApp = default;
             Excel.Workbook xlWorkBook = default;
             Excel.Worksheet xlWorkSheet = default;
-            try 
+            try
             {
                 Dictionary<string, int> RowNames = new Dictionary<string, int>();
                 Dictionary<string, List<string>> Result = new Dictionary<string, List<string>>();
@@ -319,8 +312,8 @@ namespace ExcelToGH
                 this.WarningMessage = "Something went wrong.";
                 return new Dictionary<string, List<string>>();
             }
-           
-           
+
+
         }
         private Dictionary<string, List<string>> ReadXLSColumn(string Path, string SheetName, List<string> CNames)
         {
@@ -417,13 +410,13 @@ namespace ExcelToGH
                 }
             }
             catch
-            { 
+            {
                 xlApp.DisplayAlerts = false;
                 xlWorkBook.Close();
                 xlApp.Quit();
                 this.WarningMessage = "Something went wrong.";
                 return new Dictionary<string, List<string>>();
-            }        
+            }
         }
         #region VARIABLE COMPONENT INTERFACE IMPLEMENTATION
         public bool CanInsertParameter(GH_ParameterSide side, int index)
