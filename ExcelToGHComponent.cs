@@ -42,26 +42,19 @@ namespace ExcelToGH
             for (int i = 0; i < Result.Count; i++)
             {
                 string name = Result.ElementAt(i).Key;
-                if (!this.Rows)
-                {
-                    Param_GenericObject param = new Param_GenericObject();
-                    param.Name = Params.Input[2].VolatileData.get_Branch(0)[i].ToString();
-                    param.NickName = param.Name;
-                    param.Description = "Excel column";
-                    param.Optional = true;
-                    param.Access = GH_ParamAccess.list;
-                    Params.RegisterOutputParam(param);
-                }
-                else if (this.Rows)
-                {
-                    Param_GenericObject param = new Param_GenericObject();
-                    param.Name = Params.Input[2].VolatileData.get_Branch(0)[i].ToString();
-                    param.NickName = param.Name;
+
+                Param_GenericObject param = new Param_GenericObject();
+                param.Name = Params.Input[2].VolatileData.get_Branch(0)[i].ToString();
+                param.NickName = param.Name;
+                param.Optional = true;
+                param.Access = GH_ParamAccess.list;
+                
+                if (this.Rows)
                     param.Description = "Excel row";
-                    param.Optional = true;
-                    param.Access = GH_ParamAccess.list;
-                    Params.RegisterOutputParam(param);
-                }
+                else
+                    param.Description = "Excel column";
+
+                Params.RegisterOutputParam(param);
             }
             this.FromOutputUpdate = true;
             ExpireSolution(true);
